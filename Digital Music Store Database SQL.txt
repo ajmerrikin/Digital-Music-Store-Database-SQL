@@ -1,0 +1,221 @@
+/*Which countries have the most invoices?*/
+
+select BillingCountry,Count(*)
+from Invoice
+Group by 1
+ORDER BY Count(*) DESC;
+
+/*Which city has the best customer*/
+
+SELECT BillingCity, SUM(TOTAL) TOTAL_Invoice
+from invoice
+GROUP BY 1
+ORDER BY SUM(TOTAL) DESC
+LIMIT 1;
+
+/*Return the email, first name, last name, Genre of all Rock Music Listeners ordered alphabetically by email address start with A*/
+SELECT  distinct c.email,c.FirstName, c.LastName,  g.name as genre_name
+from Customer c
+LEFT JOIN INVOICE i
+on c.CustomerId = i.CustomerId
+LEFT JOIN InvoiceLine il
+ON i.InvoiceId = il.InvoiceId
+LEFT JOIN Track t
+ON t.TrackId = il.TrackId
+LEFT JOIN Genre g
+on g.GenreId = t.GenreId
+WHERE g.name='Rock'
+ORDER BY c.email 
+
+/*Who is writing the rock music?*/
+SELECT a.ArtistId,a.name artist, Count(*) as songs
+FROM genre g
+JOIN  track t
+ON g.GenreId = t.GenreId  
+join Album alb
+on alb.AlbumId = t.AlbumId
+JOIN Artist a
+on a.ArtistId = alb.ArtistId
+WHERE G.name = 'Rock'
+GROUP BY 1,2
+order by songs desc;
+
+
+
+/*Find which artist has earned the most according to the InvoiceLines?*/
+
+
+SELECT T1.artist, sum(total_product_Sold) * UnitPrice as Earnings
+FROM (
+SELECT  Il.TrackId, InvoiceLineId,IL.UnitPrice, t.AlbumId,a.name as artist,count(*)TOTAL_PRODUCT_SOLD
+from customer c
+JOIN Invoice i
+ON c.customerid = i.customerid
+JOIN InvoiceLine il
+ON i.InvoiceId = il.InvoiceId
+JOIN Track t
+ON t.TrackId = il.TrackId
+JOIN Album Alb
+on t.AlbumId = alb.AlbumId
+JOIN ARTIST A
+ON A.ArtistId = alb.ArtistId
+GROUP BY 1,2,3,4) T1
+GROUP BY 1
+order by earnings desc;
+
+/*Now use the artist from the query above to find which customer spent the most on this artist*/
+
+SELECT  T3.artist, SUM(t3.total_track) * UnitPrice as AMOUNT_SPENT, t3.CustomerId,T3.FirstName, T3.LastName
+FROM
+(
+SELECT  c.CustomerId,a.name as artist,C.FirstName, C.LastName, il.UnitPrice,COUNT(IL.TrackId) TOTAL_TRACK
+from customer c
+JOIN Invoice i
+on c.CustomerId = i.CustomerId
+JOIN InvoiceLine il
+ON i.InvoiceId = il.InvoiceId
+JOIN Track t
+ON t.TrackId = il.TrackId
+JOIN Album Alb
+on t.AlbumId = alb.AlbumId
+JOIN ARTIST A
+ON A.ArtistId = alb.ArtistId
+GROUP BY 1,2,3,4,5) T3
+
+JOIN (SELECT T1.artist, sum(total_product_Sold) * UnitPrice as Earnings
+FROM (
+SELECT  Il.TrackId, InvoiceLineId,IL.UnitPrice, t.AlbumId,a.name as artist,count(*)TOTAL_PRODUCT_SOLD
+from customer c
+JOIN Invoice i
+on c.CustomerId = i.CustomerId
+JOIN InvoiceLine il
+ON i.InvoiceId = il.InvoiceId
+JOIN Track t
+ON t.TrackId = il.TrackId
+JOIN Album Alb
+on t.AlbumId = alb.AlbumId
+JOIN ARTIST A
+ON A.ArtistId = alb.ArtistId
+GROUP BY 1,2,3,4) T1
+GROUP BY 1
+order by earnings desc
+limit 1) t2
+on t3.artist = t2.artist
+GROUP BY 1,3,4,5
+ORDER BY   amount_spent desc,t3.artist
+
+ORDER BY COUNT(*) DESC
+LIMIT 10;
+
+
+/*We want to find out the most popular music Genre for each country. We determine the most popular genre as the genre with the highest amount of purchases. Write a query that returns each country along with the top Genre. 
+For countries where the maximum number of purchases is shared, return all Genres*/
+
+SELECT Country, Genre, GenreId, Total_Purchase
+FROM (
+SELECT BillingCountry as country, g.name as Genre, g.GenreId, sum(quantity) total_purchase,
+Dense_RANK() OVER (PARTITION BY billingcountry ORDER BY sum(quantity)  desc) as ranking
+
+FROM  customer c
+LEFT JOIN Invoice i
+on c.CustomerId = i.CustomerId
+LEFT JOIN InvoiceLine il
+on i.InvoiceId = il.InvoiceId
+LEFT JOIN Track t
+ON il.TrackId = t.TrackId
+left join genre g
+on g.GenreId = t.GenreId
+GROUP BY 1,2,3) sub
+WHERE ranking = 1;
+
+/*Return all the track names that have a song length longer than the average song length*/
+
+
+SELECT name as song, avg(Milliseconds) avg_song_length
+FROM track 
+GROUP by name
+HAVING avg(Milliseconds)> (SELECT avg(p.Milliseconds) avg_length FROM track p)
+ORDER by avg_song_length desc;
+
+
+
+/*Write a query that returns the country along with the top customer and how much they spent 
+For countries where the top amount spent is shared, provide all customers who spent this amount*/
+
+SELECT Country, Total_Spent, FirstName, LastName, CustomerId
+ FROM 
+(SELECT I.BillingCountry as Country,c.FirstName, C.LastName,c.CustomerId,sum(i.total) total_spent,
+dense_rank() OVER (PARTITION BY BillingCountry ORDER BY sum(i.total)  desc) as ranking
+
+FROM Customer C
+JOIN Invoice I
+ON C.CustomerId =I.CustomerId
+GROUP BY 1,2,3,4
+) WHERE RANKING = 1
+
+
+/*What are the top 5 playlists with the highest number of songs*/
+
+SELECT Playlist_Name, Total_Songs
+FROM (
+      SELECT p.name as Playlist_Name,  COUNT(PT.trackid) Total_Songs
+      ,DENSE_Rank () OVER (ORDER BY COUNT(pT.trackid) DESC) Ranking
+      FROM Playlist p
+      LEFT JOIN PlaylistTrack pt
+      ON p.PlaylistId = pt.PlaylistId
+      GROUP BY p.name
+) 
+WHERE Ranking <= 5;
+
+/*What are the annual sales*/
+SELECT strftime('%Y',InvoiceDate) Invoice_Year, SUM(total) Total_Sales, SUM(Quantity) Total_Purchased
+FROM INVOICE i
+LEFT JOIN InvoiceLine IL
+ON I.InvoiceId = IL.InvoiceId
+GROUP BY 1
+ORDER BY 1;
+
+
+
+/*What is the monthly sales volume in the year 2013*/
+
+SELECT strftime('%Y-%m',InvoiceDate) Invoice_Month_Year, SUM(quantity) Sales_Volume
+FROM INVOICE i
+LEFT JOIN InvoiceLine IL
+ON I.InvoiceId = IL.InvoiceId
+WHERE InvoiceDate BETWEEN '2013-01-01' and '2014-01-01'
+GROUP BY 1
+ORDER BY 1;
+
+
+
+/*What is the distribution of Customers Based on months between the last two invoices? 
+Find the month difference in the last 2 months and find the distribution per bucket*/
+
+SELECT CASE  WHEN Date_Diff_in_Months > 12 THEN 'Over a year'
+             WHEN Date_Diff_in_Months between 10 and 12 THEN '10-12 months'
+	       WHEN Date_Diff_in_Months  between 7 and 9 THEN '7-9 months'
+	       WHEN Date_Diff_in_Months  between 4 and 6 THEN '4-6 months'
+	       ELSE '3 months and under' END Bucket_Months
+      ,COUNT(1) Total_Customers
+FROM 
+(
+      SELECT CustomerId, FirstName, LastName, strftime('%d-%m-%Y',InvoiceDate) as InvoiceDate
+     ,strftime('%d-%m-%Y', LEAD(InvoiceDate) OVER (PARTITION BY CustomerId ORDER BY InvoiceDate)) as Lead_C
+     ,Round((julianday(LEAD(InvoiceDate) OVER (PARTITION BY CustomerId ORDER BY InvoiceDate)) - julianday(InvoiceDate))/(365/12)) as Date_Diff_in_Months
+     FROM (
+     SELECT i.CustomerId, c.FirstName, c.LastName, InvoiceDate
+    ,DENSE_RANK() OVER (PARTITION BY i.CustomerId ORDER BY invoicedate DESC) as dense_Rankin
+     FROM Invoice i
+     JOIN Customer c
+     ON C.CustomerId = i.CustomerId
+
+) 
+WHERE dense_Rankin in (1,2)
+)
+WHERE Lead_C is not null
+GROUP BY 1
+ORDER BY COUNT(*) DESC
+
+
+
